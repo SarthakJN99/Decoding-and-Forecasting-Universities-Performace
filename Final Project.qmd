@@ -1,0 +1,763 @@
+---
+title: "Final Project Predictive Analytics"
+format: docx
+editor: visual
+---
+
+# 
+
+## Introduction
+
+1.  **Business Question** What are the factors that affect these ranks and how can these rankings be used to attract more students and industry partnerships? 
+
+2.  **Business Case**  In an increasingly competitive academic environment, universities are striving not only to attract the best students and faculty but also to secure funding and partnerships. A higher ranking can significantly enhance a university's attractiveness to potential students, faculty, and investors. Understanding the key factors that contribute to these rankings can help university administrators implement targeted improvements to enhance their global standing, thus attracting more talent and resources. 
+
+<!-- -->
+
+3.  **Analytics Question** How do specific predictive factors, such as teaching quality, research output, citations, industry income, international outlook, student-to-staff ratio, proportion of international students, and gender diversity, influence a university's global ranking? 
+
+    **Outcome Variable of Interest**: The outcome variable of interest is the university's global ranking, on a continuous scale based on ranking methodology. 
+
+    **Key Predictors:** The dataset features key predictors critical for university analysis, including numeric scores for teaching quality, research output, citations, industry income, and international outlook. It also quantifies the student-to-staff ratio, proportion of international students, and the female to male ratio, alongside the categorical variable of location. These factors collectively provide a detailed framework for assessing university performance and global ranking. 
+
+4.  **Data Set Description** This dataset, sourced from Kaggle but originally derived from the Times Higher Education World University Rankings available at Times Higher Education Rankings consists of 2,341 rows and 13 columns. It encompasses a broad spectrum of metrics related to universities globally, including rankings, names, locations, student demographics, and performance scores across various domains such as teaching, research, citations, industry income, and international outlook. The dataset is a mix of numerical and categorical data. Notably, the "Female:Male Ratio" column has 213 missing values, and crucial performance indicators like "OverAll Score," "Teaching Score," "Research Score," etc., exhibit over 500 missing values. Addressing these gaps during data preprocessing will be essential, involving standardization, missing value handling, and data type verification to prepare the dataset for comprehensive analysis and predictive modeling. 
+
+## Loading data and Preprocessing
+
+```{r}
+ Universities<- read.csv("C:/Users/kriti/Downloads/Universities.csv")
+ View(Universities)
+ head(Universities)
+ 
+ Universities <- na.omit(Universities)
+ 
+ #Data Preprocessing
+ Universities$International.Student <- as.integer(gsub("[^0-9]", "",Universities$International.Student))
+```
+
+## Descriptive Statistics
+
+### Correlation and Co-Variation Analysis
+
+```{r}
+library(GGally)
+
+correlation_data <- data.frame(
+  "Number of Students" = Universities$No.of.student,
+  "Students per Staff" = Universities$No.of.student.per.staff,
+  "International Students" = Universities$International.Student,
+  "Males per 100 Students" = Universities$Males.per.100.students,
+  "Teaching Score" = Universities$Teaching.Score,
+  "Research Score" = Universities$Research.Score,
+  "Citations Score" = Universities$Citations.Score,
+  "Industry Income Score" = Universities$Industry.Income.Score,
+  "International Outlook Score" = Universities$International.Outlook.Score
+)
+
+# Check for non-numeric columns and convert them to numeric if necessary
+correlation_data <- data.frame(lapply(correlation_data, function(x) {
+  as.numeric(gsub("[^0-9.-]", "", x))
+}))
+correlation_data_clean <- na.omit(correlation_data)
+
+# Generate the correlation plot
+ggpairs(correlation_data,
+        progress = FALSE 
+)
+
+```
+
+```{r}
+library(corrplot)
+
+matrix<- cor(correlation_data_clean)
+corrplot(matrix, method = "color", order = "hclust")
+```
+
+```{r}
+options(scipen = 999)
+
+# Conduct an ANOVA test to check for differences in Overall Score across different Locations
+anova_result <- aov(OverAll.Score ~ Location, data = Universities)
+summary(anova_result)
+```
+
+### Geographic Distribution
+
+```{r}
+top_100_universities <- Universities[Universities$University.Rank <= 100 & !is.na(Universities$Location), ]
+country_count <- table(top_100_universities$Location)
+library(ggplot2)
+
+# Convert the table to a data frame for plotting
+country_data <- as.data.frame(country_count)
+names(country_data) <- c("Country", "Frequency")
+
+# Create the bar chart
+ggplot(country_data, aes(x = Country, y = Frequency, fill = Country)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  labs(title = "Frequency of Top 100 Ranked Universities by Country",
+       x = "Country",
+       y = "Number of Highly Ranked University Universities",
+       fill = "Country")
+```
+
+### QQ Plots for Data Distribution
+
+```{r}
+qqnorm(Universities$University.Rank,
+       main = "QQ Plot for RANK")
+qqline(Universities$University.Rank, col = "red")
+
+qqnorm(Universities$OverAll.Score,
+       main = "QQ Plot for Overall Score")
+qqline(Universities$OverAll.Score, col = "red")
+```
+
+### Chi-square Test
+
+```{r}
+# Chi-square test for the association between Country and Faculty/Student Ratio Categories
+chisq.test(table(Universities$Location, Universities$No.of.student.per.staff))
+
+# Chi-square test for the association between Country and University Rankings
+chisq.test(table(Universities$Location, Universities$University.Rank))
+```
+
+### Histograms
+
+```{r}
+#Rank
+hist(Universities$University.Rank)
+# Histogram for the Number of Students
+hist(Universities$No.of.student,
+     main = "Histogram of Number of Students",
+     xlab = "Number of Students",
+     col = "blue",
+     border = "black")
+
+# Histogram for the Number of Students per Staff
+hist(Universities$No.of.student.per.staff,
+     main = "Histogram of Number of Students per Staff",
+     xlab = "Number of Students per Staff",
+     col = "green",
+     border = "black")
+
+# Histogram for International Students
+hist(Universities$International.Student,
+     main = "Histogram of International Students",
+     xlab = "International Students",
+     col = "red",
+     border = "black")
+
+# Histogram for Overall Score
+hist(Universities$OverAll.Score,
+     main = "Histogram of Overall Scores",
+     xlab = "Overall Scores",
+     col = "purple",
+     border = "black")
+```
+
+## Partitioning for Predictive Models
+
+```{r}
+set.seed(10)
+#Train
+tr.size <- 0.7
+train <- sample(nrow(Universities), 
+                tr.size * nrow(Universities))
+train[1:10]
+length(train)
+
+#Test
+Universities.train <- Universities[train, ]
+Universities.test <- Universities[-train, ]
+
+
+```
+
+## OLS
+
+### OLS to test asummptions
+
+```{r}
+fit.ols <- lm( University.Rank ~ No.of.student + No.of.student.per.staff + International.Student +
+                 Males.per.100.students +Teaching.Score + Research.Score + Citations.Score + 
+                Industry.Income.Score + International.Outlook.Score,
+              data = Universities)
+
+
+summary(fit.ols)
+
+```
+
+```{r}
+library(stargazer)
+
+
+stargazer(fit.ols, type = "text", 
+          title = "OLS Results",
+          header = FALSE, 
+          no.space = TRUE,
+          single.row = TRUE,
+          digits = 4,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          out = "model_summary.txt")
+```
+
+#### Plots
+
+```{r}
+plot(fit.ols, which = 1)
+
+#Q-Q plot of residuals
+plot(fit.ols, which = 2)
+
+#residuals vs. fitted values
+plot(fit.ols, which = 3)
+
+# Plotting residuals vs. leverage
+plot(fit.ols, which = 5)
+```
+
+#### BP Test
+
+```{r}
+library(lmtest)
+bptest(fit.ols, data = Universities)
+```
+
+#### Linearity
+
+```{r}
+plot(Universities$No.of.student, Universities$Rank, 
+     xlab = "No.of.student", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$No.of.student, Universities$Rank), 
+      col = "red") # Trend curve
+
+plot(Universities$International.Student,Universities$University.Rank, 
+     xlab = "International Students", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$International.Student,Universities$Rank), 
+      col = "red") # Trend curve
+plot(Universities$Research.Score, Universities$Rank, 
+     xlab = "Research Score", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$Research.Score, Universities$Rank), 
+      col = "red") # Trend curve
+
+plot(Universities$Teaching.Score, Universities$Rank, 
+     xlab = "Teaching.Score", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$Teaching.Score, Universities$Rank), 
+      col = "red") # Trend curve
+
+plot(Universities$Citations.Score, Universities$Rank, 
+     xlab = "Citations.Score", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$Citations.Score, Universities$Rank), 
+      col = "red") # Trend curve
+
+plot(Universities$Industry.Income.Score, Universities$Rank, 
+     xlab = "Industry.Income.Score", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$Industry.Income.Score, Universities$Rank), 
+      col = "red") # Trend curve
+
+plot(Universities$International.Outlook.Score, Universities$Rank, 
+     xlab = "International.Outlook.Score", 
+     ylab ="Rank", 
+     cex=.5, 
+     col="darkgrey")
+abline(fit.ols) # Straight line
+lines(lowess(Universities$International.Outlook.Score, Universities$Rank), 
+      col = "red") # Trend curve
+
+plot(fit.ols, which = 1, 
+     col = "darkgrey")
+abline(h = 0)
+```
+
+#### Heterosketasticity
+
+```{r}
+residuals <- residuals(fit.ols)
+fitted.values <- fitted(fit.ols)
+
+plot(fitted.values, residuals, xlab = "Fitted Values", ylab = "Residuals", main = "Residual vs. Fitted Plot")
+abline(h = 0, col = "red")
+```
+
+#### Shapiro- Wilk Test
+
+```{r}
+shapiro.test(residuals(fit.ols))
+
+# Q-Q plot
+qqnorm(residuals(fit.ols))
+qqline(residuals(fit.ols))
+```
+
+#### Condition Index
+
+```{r}
+#Multicoliniearity
+
+library(olsrr)
+
+ci <- ols_eigen_cindex(fit.ols)
+
+print(ci[ , 1:2])
+```
+
+## Model Selection
+
+### Model 1 : Plain OLS with all quantitative
+
+```{r}
+fit.ols.train <- lm( University.Rank ~ No.of.student + No.of.student.per.staff + International.Student +
+                 Males.per.100.students + Teaching.Score + Research.Score + Citations.Score + 
+                Industry.Income.Score + International.Outlook.Score,
+              data = Universities.train)
+
+
+summary(fit.ols.train)
+
+predictions <- predict(fit.ols.train, Universities.test)
+
+actuals <- Universities.test$University.Rank
+residuals <- predictions - actuals
+OLS.RMSE <- sqrt(mean(residuals^2,na.rm = TRUE))
+
+print(paste("RMSE of Liner Regression test set" , OLS.RMSE))
+
+#Prediction on complete set 
+
+predictions.reg <- predict(fit.ols.train, Universities)
+```
+
+```{r}
+plot(fit.ols.train, which = 1)
+
+#Q-Q plot of residuals
+plot(fit.ols.train, which = 2)
+
+#residuals vs. fitted values
+plot(fit.ols.train, which = 3)
+
+# Plotting residuals vs. leverage
+plot(fit.ols.train, which = 5)
+```
+
+#### CV for Plain OLS
+
+```{r}
+
+Universities <- na.omit(Universities)
+library(boot)
+
+# Simplified model without custom function first
+ols_model <- glm(University.Rank ~ No.of.student + No.of.student.per.staff + International.Student +
+                 Males.per.100.students + Teaching.Score + Research.Score + Citations.Score + 
+                 Industry.Income.Score + International.Outlook.Score, 
+                 data = Universities.test, family = gaussian())
+
+# Perform 10-fold cross-validation
+cv_ols <- cv.glm(Universities.test, ols_model, K = 10)
+test.mse.10f <- cv_ols$delta[1]
+
+rmse.10f.ols <- sqrt(test.mse.10f)
+rmse.10f.ols
+
+```
+
+### Model 2 : Log Linear Model
+
+```{r}
+
+Universities$RankLog <- log(Universities$University.Rank)
+set.seed(10)
+#Train
+tr.size <- 0.7
+train <- sample(nrow(Universities), 
+                tr.size * nrow(Universities))
+train[1:10]
+length(train)
+
+#Test
+Universities.train <- Universities[train, ]
+Universities.test <- Universities[-train, ]
+
+fit.ols_log <- lm( RankLog ~ No.of.student + No.of.student.per.staff + International.Student +
+                     Males.per.100.students + Teaching.Score + Research.Score + Citations.Score + 
+                    Industry.Income.Score + International.Outlook.Score,
+                  data = Universities.train)
+
+# Summary of the updated OLS model
+summary(fit.ols_log)
+predictions.test <- exp(predict(fit.ols_log, newdata = Universities.test))
+
+Logged.OLS.RMSE<- sqrt(mean(( Universities.test$University.Rank - predictions.test)^2,na.rm = TRUE))
+print(paste("RMSE on Test Set (log-transformed): ", Logged.OLS.RMSE))
+```
+
+```{r}
+plot(fit.ols_log, which = 1)
+
+#Q-Q plot of residuals
+plot(fit.ols_log, which = 2)
+
+#residuals vs. fitted values
+plot(fit.ols_log, which = 3)
+
+# Plotting residuals vs. leverage
+plot(fit.ols_log, which = 5)
+```
+
+```{r}
+Universities <- na.omit(Universities)
+library(boot)
+
+Universities$RankLog <- log(Universities$University.Rank)
+set.seed(10)
+#Train
+tr.size <- 0.7
+train <- sample(nrow(Universities), 
+                tr.size * nrow(Universities))
+train[1:10]
+length(train)
+
+#Test
+Universities.train <- Universities[train, ]
+Universities.test <- Universities[-train, ]
+
+cv.ols_log <- glm( RankLog ~ No.of.student + No.of.student.per.staff + International.Student +
+                     Males.per.100.students + Teaching.Score + Research.Score + Citations.Score + 
+                    Industry.Income.Score + International.Outlook.Score,
+                  data = Universities.train,family = gaussian())
+
+ 
+
+# Perform 10-fold cross-validation
+cv.ols.log <- cv.glm(Universities.test, ols_model, K = 10)
+log.mse.10f <- cv.ols.log$delta[1]
+
+rmse.10f.olslog <- sqrt(log.mse.10f)
+rmse.10f.olslog
+```
+
+### Model 3 : Weighted Least Squares
+
+```{r}
+fitted.ols <- fitted(fit.ols)
+abs.res <- abs(residuals(fit.ols))
+lm.abs.res <- lm(abs.res ~ fitted.ols)
+fitted(lm.abs.res)[1:10]
+
+plot(fitted.ols, abs.res) # Take a look
+abline(lm.abs.res, col="red")
+```
+
+```{r}
+wts <- 1 / fitted(lm.abs.res) ^ 2
+fit.wls.train <- lm(University.Rank ~ No.of.student + No.of.student.per.staff + International.Student +
+                Males.per.100.students + Teaching.Score + Research.Score + Citations.Score + 
+                Industry.Income.Score + International.Outlook.Score,
+              data = Universities.train, weights = wts[train])
+
+# Summarize the trained WLS model
+summary(fit.wls.train)
+
+# Make predictions on the test set
+predictions.test <- predict(fit.wls.train, newdata = Universities.test)
+
+# Calculate residuals for the test set
+residuals.test <- Universities.test$University.Rank - predictions.test
+
+# Calculate RMSE for the test set
+rmse.wls <- sqrt(mean(residuals.test^2,na.rm = TRUE))
+
+# Print RMSE for the test set
+print(paste("The RMSE for WLS on test set : ", rmse.wls))
+```
+
+```{r}
+library(MASS)  # for statistical functions
+library(caret)
+set.seed(123)  # for reproducibility
+folds <- createFolds(Universities.train$University.Rank, k = 10)
+fit_wls_cv <- function(training_indices) {
+  training_data <- Universities.train[training_indices, ]
+  wts <- 1 / fitted(lm(abs(residuals(lm(University.Rank ~ No.of.student + No.of.student.per.staff + International.Student + 
+                                    Males.per.100.students + Teaching.Score + Research.Score + Citations.Score +  
+                                    Industry.Income.Score + International.Outlook.Score, data = training_data))) ~ 
+                                    fitted(lm(University.Rank ~ No.of.student + No.of.student.per.staff + International.Student + 
+                                    Males.per.100.students + Teaching.Score + Research.Score + Citations.Score +  
+                                    Industry.Income.Score + International.Outlook.Score, data = training_data)))) ^ 2
+
+ fit_wls  <- lm(University.Rank ~ No.of.student + No.of.student.per.staff + International.Student + 
+                Males.per.100.students + Teaching.Score + Research.Score + Citations.Score +  
+                Industry.Income.Score + International.Outlook.Score, 
+                data = training_data, weights = wts)
+  return(fit_wls)
+}
+rmse_values <- sapply(folds, function(fold_indices) {
+  test_data <- Universities.test[-fold_indices, ]
+  fitted_model <- fit_wls_cv(fold_indices)
+  predictions <- predict(fitted_model, newdata = test_data)
+  rmse <- sqrt(mean((test_data$University.Rank - predictions)^2))
+  return(rmse)
+})
+
+rmse.wls <- mean(rmse_values)
+print(rmse.wls)
+
+
+```
+
+```{r}
+plot(fit.wls.train, which = 1)
+
+#Q-Q plot of residuals
+plot(fit.wls.train, which = 2)
+
+#residuals vs. fitted values
+plot(fit.wls.train, which = 3)
+
+# Plotting residuals vs. leverage
+plot(fit.wls.train, which = 5)
+
+residuals <- residuals(fit.wls.train)
+fitted.values <- fitted(fit.wls.train)
+
+plot(fitted.values, residuals, xlab = "Fitted Values", ylab = "Residuals", main = "Residual vs. Fitted Plot")
+abline(h = 0, col = "red")
+```
+
+```{r}
+library(lmtest)
+bptest(fit.wls.train, data = Universities)
+```
+
+### Model 4 : Weighted Least Squares with only Significant Variables
+
+```{r}
+fit.wls.train2 <- lm(University.Rank ~ No.of.student  + Teaching.Score + Research.Score + Citations.Score + 
+                Industry.Income.Score + International.Outlook.Score,  data = Universities.train, weights = wts[train])
+
+# Summarize the trained WLS model
+summary(fit.wls.train2)
+
+# Make predictions on the test set
+predictions.test <- predict(fit.wls.train2, newdata = Universities.test)
+
+# Calculate residuals for the test set
+residuals.test <- Universities.test$University.Rank - predictions.test
+
+# Calculate RMSE for the test set
+rmse.wls2<- sqrt(mean(residuals.test^2,na.rm = TRUE))
+
+# Print RMSE for the test set
+print(paste("The RMSE for WLS on test set : ", rmse.wls2))
+
+```
+
+```{r}
+
+library(MASS)  # for statistical functions
+library(caret)
+set.seed(123)  # for reproducibility
+folds <- createFolds(Universities.train$University.Rank, k = 10)
+fit_wls_cv <- function(training_indices) {
+  training_data <- Universities.train[training_indices, ]
+ wts <- 1 / fitted(lm(abs(residuals(lm(University.Rank ~ No.of.student + Teaching.Score + Research.Score + Citations.Score +  
+                                    Industry.Income.Score + International.Outlook.Score, data = training_data))) ~ 
+                                    fitted(lm(University.Rank ~ No.of.student  + Teaching.Score + Research.Score + Citations.Score +  
+                                    Industry.Income.Score + International.Outlook.Score, data = training_data)))) ^ 2
+
+  fit_wls <- lm(University.Rank ~ No.of.student  + Teaching.Score + Research.Score + Citations.Score +  
+                Industry.Income.Score + International.Outlook.Score, 
+                data = training_data, weights = wts)
+  return(fit_wls)
+}
+rmse_values <- sapply(folds, function(fold_indices) {
+  test_data <- Universities.test[-fold_indices, ]
+  fitted_model <- fit_wls_cv(fold_indices)
+  predictions <- predict(fitted_model, newdata = test_data)
+  rmse <- sqrt(mean((test_data$University.Rank - predictions)^2))
+  return(rmse)
+})
+
+rmse.wls.red <- mean(rmse_values)
+print(rmse.wls.red)
+
+
+```
+
+```{r}
+plot(fit.wls.train2, which = 1)
+
+#Q-Q plot of residuals
+plot(fit.wls.train2, which = 2)
+
+#residuals vs. fitted values
+plot(fit.wls.train2, which = 3)
+
+# Plotting residuals vs. leverage
+plot(fit.wls.train2, which = 5)
+```
+
+```{r}
+library(lmtest)
+bptest(fit.wls.train2, data = Universities)
+```
+
+### Model 5 : Boosted Tree
+
+```{r}
+library(gbm)
+library(dplyr) 
+
+```
+
+```{r}
+set.seed(10)
+boost.uni.tr <- gbm(University.Rank ~ No.of.student + No.of.student.per.staff + International.Student + 
+                 Males.per.100.students + Teaching.Score + Research.Score + Citations.Score +  
+                Industry.Income.Score + International.Outlook.Score, 
+                 data = Universities.train, 
+                 distribution = "gaussian", 
+                 n.trees = 5000, 
+                 interaction.depth = 2, 
+                 shrinkage = 0.01, 
+                 cv.folds = 10, 
+                 ) 
+
+```
+
+```{r}
+boost.pred <- predict(boost.uni.tr, # Predict with the trained model 
+                      newdata = Universities.test, # Test with the test subset data 
+                      n.trees = 5000) 
+ 
+# Get the minimum CV error and corresponding RMSE 
+min.cv.error <- min(boost.uni.tr$cv.error) 
+min.rmse.tree <- sqrt(min.cv.error) 
+cat("\n", "10FCV RMSE for larger tree =", min.rmse.tree, "\n")  
+```
+
+### Model 6 Boosted Tree Boosted Tree Reduced
+
+```{r}
+set.seed(10)
+boost.uni.tr2 <- gbm(University.Rank ~ No.of.student + Teaching.Score + Research.Score + Citations.Score +  
+                Industry.Income.Score + International.Outlook.Score, 
+                 data = Universities.train, 
+                 distribution = "gaussian", 
+                 n.trees = 5000, 
+                 interaction.depth = 2, 
+                 shrinkage = 0.01, 
+                 cv.folds = 10, 
+                 ) 
+boost.uni.tr2 
+```
+
+```{r}
+boost.pred2 <- predict(boost.uni.tr2, # Predict with the trained model 
+                      newdata = Universities.test, # Test with the test subset data 
+                      n.trees = 5000) 
+predicted2 <- boost.pred2 
+ 
+ 
+# Get the minimum CV error and corresponding RMSE 
+min.cv.error2 <- min(boost.uni.tr2$cv.error) 
+min.cv.rmse2 <- sqrt(min.cv.error2) 
+cat("\n", "10FCV RMSE =", min.cv.rmse2, "\n") 
+
+min.cv.index2 <- which.min(boost.uni.tr2$cv.error)
+num.trees2 <- length(boost.uni.tr2$cv.error) 
+num.trees2
+```
+
+```{r}
+plot(sqrt(boost.uni.tr2$cv.error), type = "l",
+xlab = "Number of Boosted Trees", ylab = "10FCV Test MSE")
+```
+
+```{r}
+summary(boost.uni.tr2)
+
+ 
+```
+
+```{r}
+importance_data <- data.frame(
+  Variable = c("Citations.Score", "Research.Score", "Teaching.Score", "International.Outlook.Score", "No.of.student", "Industry.Income.Score"),
+  RelativeImportance = c(71.2430651, 18.4365356, 7.4023935, 2.1726914, 0.4405446, 0.3047698)
+)
+
+ggplot(importance_data, aes(x = Variable, y = RelativeImportance, fill = Variable)) +
+  geom_col() +
+  theme_classic() +
+  labs(title = "Relative Importance of Variables", x = "Variable", y = "Relative Importance (%)") +
+  scale_fill_manual(values = c("lightblue", "skyblue", "dodgerblue", "royalblue", "navy", "deepskyblue"))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Finalizing the model
+
+```{r}
+rmse_data <- data.frame(
+  Model = c("OLS", "Log-Transformed OLS", "WLS", "Reduced WLS", "Boosted Model Large Tree", "Boosted Model"),
+  RMSE = c(rmse.10f.ols , rmse.10f.olslog, rmse.wls , rmse.wls.red , min.rmse.tree, min.cv.rmse2)
+)
+
+# Order the data frame by RMSE in ascending order for plotting
+rmse_data <- rmse_data[order(rmse_data$RMSE),]
+
+ggplot(rmse_data, aes(x = reorder(Model, RMSE), y = RMSE, fill = Model)) +
+  geom_bar(stat = "identity", color = "black") +
+  theme_classic() +
+  labs(title = "Comparison of RMSE Across Different Models",
+       x = "Model",
+       y = "Root Mean Square Error (RMSE)") +
+  coord_flip() + 
+  scale_fill_manual(values = c("lightblue", "skyblue", "dodgerblue", "royalblue", "navy", "deepskyblue")) # Adds one more blue color
+
+# Display and save the plot
+ggsave("model_rmse_comparison.png", width = 10, height = 6)
+```
+
+```{r}
+
+rmse_data <- data.frame(
+  Model = c("OLS", "Log-Transformed OLS", "WLS", "Reduced WLS", "Boosted Model Large Tree", "Boosted Model"),
+  RMSE.10F.CV = c(rmse.10f.ols , rmse.10f.olslog, rmse.wls , rmse.wls.red , min.rmse.tree, min.cv.rmse2)
+)
+
+# Order the data frame by RMSE in ascending order for clarity
+rmse_data <- rmse_data[order(rmse_data$RMSE),]
+
+# Print the table in the console
+print(rmse_data)
+```
