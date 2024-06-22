@@ -1,4 +1,4 @@
-# Decoding-and-Forecasting-Universities-Performace
+# Decoding-and-Forecasting-Universities-Performance
 Analyzing global university performance via Times Higher Education Rankings. Predictive models highlight critical predictors: teaching quality, research output, citations, industry income, and international outlook. Insights aid administrators in enhancing global standing, appealing to students, and attracting industry partners.
 
 ### Business Question
@@ -33,8 +33,6 @@ International Student Percentages: Also right-skewed, showing lower proportions 
 Overall Scores: Slightly right-skewed, suggesting a concentration of higher performance among fewer institutions.
 Geographic Concentration: A notable concentration of ranked universities in the United States, indicating geographic disparities in educational excellence.
 
-
-
 ### Data Pre-Processing and Transformations
 We enhanced the dataset for a more detailed analysis by:
 
@@ -52,7 +50,6 @@ Negative correlations between university rank (numerically) and both teaching an
 Geographical location significantly influences rankings, suggesting that a university's location, alongside its academic and financial performance, plays a pivotal role in its global standing.
 
 ![image](https://github.com/kritika2004/-Decoding-and-Forecasting-Universities-Performace/assets/112310702/06debb20-e373-401c-818f-0dcddec60ad7)
-
 
 ### Modeling Methods and Model Specifications
 Initial Model Specification
@@ -72,7 +69,6 @@ International Students: Slight positive association with rankings.
 Statistically significant, the model explains a substantial 92.95% variance in rankings, asserting the robustness of these findings with high predictive power.
 
 ![image](https://github.com/kritika2004/-Decoding-and-Forecasting-Universities-Performace/assets/112310702/948f781b-9ffa-4810-ac5e-f1557b22a4dc)
-
 
 ## Assumption Tests
 In our analysis, several OLS assumptions were not met:
@@ -109,7 +105,6 @@ International Students: Slightly improve rankings.
 The reduced Boosted Tree model focuses on key predictors, achieving an impressive RMSE of 65.15. The model assigns the greatest importance to:
 
 ![image](https://github.com/kritika2004/-Decoding-and-Forecasting-Universities-Performace/assets/112310702/80e348c2-b5a4-401c-af46-0e408026cdc6)
-
 
 Citations Score: Accounts for over 71% of the model's weighting.
 Research Score: Comprises about 18% of the model's influence.
